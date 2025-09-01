@@ -18,6 +18,9 @@
         .correct { color: #4ade80; }
         .incorrect { color: #f87171; }
         .pulse { animation: pulse-animation 1.5s infinite; }
+        tr:nth-child(even) { background-color: rgba(55,65,81,0.3); }
+        tr:hover { background-color: rgba(59,130,246,0.2); }
+
         @keyframes pulse-animation {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
             50% { transform: scale(1.02); box-shadow: 0 0 15px 10px rgba(239, 68, 68, 0); }
@@ -53,7 +56,9 @@
             <div class="flex items-end gap-2">
                 <button id="start-button" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md">Start</button>
                 <button id="stop-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md" disabled>Stop</button>
+                <button id="clear-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md">Clear</button>
             </div>
+
         </div>
 
         <!-- Main Dashboard Grid -->
@@ -63,15 +68,16 @@
             <div class="lg:col-span-1 flex flex-col gap-6">
                 <div class="bg-gray-800/50 p-6 rounded-xl shadow-lg border border-gray-700">
                     <h2 class="text-xl font-semibold mb-4 text-gray-400">Live System Status</h2>
-                    <div id="status-box" class="p-6 rounded-lg text-center transition-all duration-300 status-idle">
-                        <p id="status-text" class="text-3xl font-bold text-white">IDLE</p>
+                    <div id="status-box" class="p-3 rounded-lg text-center transition-all duration-300 status-idle">
+                        <p id="status-text" class="text-xl font-bold text-white">IDLE</p>
                     </div>
+
                 </div>
                 <div class="bg-gray-800/50 p-6 rounded-xl shadow-lg border border-gray-700">
                      <div class="grid grid-cols-2 gap-4 text-center">
                         <div class="bg-gray-700/50 p-3 rounded-lg">
                             <h3 class="text-gray-500 text-sm uppercase">True Label</h3>
-                            <p id="true-label" class="text-lg font-semibold">-</p>
+                            <p id="true-label" class="text-sm font-medium truncate">-</p>
                         </div>
                         <div class="bg-gray-700/50 p-3 rounded-lg">
                             <h3 class="text-gray-500 text-sm uppercase">Result</h3>
@@ -91,6 +97,11 @@
                         </div>
                     </div>
                 </div>
+                <div class="bg-gray-800/50 p-4 rounded-xl shadow-lg border border-gray-700">
+                    <h2 class="text-lg font-semibold mb-3 text-gray-400">Prediction Timeline</h2>
+                    <div class="relative h-40"><canvas id="timeline-chart"></canvas></div>
+                </div>
+
             </div>
 
             <!-- Right Columns: Chart and Log -->
@@ -136,12 +147,49 @@
             const modelSelect = document.getElementById('model-select');
             const datasetSelect = document.getElementById('dataset-select');
             const chartCanvas = document.getElementById('detection-chart');
+            const clearButton = document.getElementById('clear-button');
 
             // --- State variables ---
             let totalWindows = 0;
             let correctPredictions = 0;
             let detectionCounts = {};
             const MAX_LOG_ENTRIES = 50;
+
+            function clearDashboard() {
+                // Reset status box
+                statusText.textContent = 'IDLE';
+                statusBox.className = 'p-3 rounded-lg text-center transition-all duration-300 status-idle';
+
+                // Reset metrics
+                totalWindows = 0;
+                correctPredictions = 0;
+                detectionCounts = {};
+                totalWindowsEl.textContent = '0';
+                accuracyEl.textContent = '0%';
+                trueLabelEl.textContent = '-';
+                resultTextEl.textContent = '-';
+                resultTextEl.className = 'text-lg font-bold';
+
+                // Reset charts
+                detectionChart.data.labels = [];
+                detectionChart.data.datasets[0].data = [];
+                detectionChart.update();
+
+                timelineChart.data.labels = [];
+                timelineChart.data.datasets[0].data = [];
+                timelineChart.update();
+
+                // Clear event log
+                eventLog.innerHTML = '';
+
+                // Reset buttons state
+                setControlsState(false);
+                startButton.textContent = 'Start';
+                stopButton.textContent = 'Stop';
+            }
+
+            // --- Event Listener for Clear ---
+            clearButton.addEventListener('click', clearDashboard);
 
             // --- Chart.js Setup ---
             const chartCtx = chartCanvas.getContext('2d');
@@ -154,11 +202,50 @@
                     maintainAspectRatio: false,
                     scales: {
                         x: { beginAtZero: true, ticks: { color: '#9ca3af', stepSize: 1 }, grid: { color: 'rgba(75, 85, 99, 0.5)' } },
-                        y: { ticks: { color: '#9ca3af' }, grid: { display: false } }
+                        y: {
+                                ticks: {
+                                    callback: (val) => val === 1 ? 'Attack' : 'Normal',
+                                    color: '#9ca3af'
+                                }
+                            }
+
                     },
                     plugins: { legend: { display: false }, tooltip: { enabled: false } }
                 }
             });
+
+            // --- Line Chart Setup ---
+            const timelineCtx = document.getElementById('timeline-chart').getContext('2d');
+            const timelineChart = new Chart(timelineCtx, {
+                type: 'line',
+                data: {
+                    labels: [], // timestamps
+                    datasets: [{
+                        label: 'Predictions',
+                        data: [],
+                        borderColor: 'rgba(6, 182, 212, 0.8)',
+                        backgroundColor: 'rgba(6, 182, 212, 0.2)',
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(75,85,99,0.3)' } },
+                        y: {
+                                ticks: {
+                                    callback: (val) => val === 1 ? 'Attack' : 'Normal',
+                                    color: '#9ca3af'
+                                }
+                            }
+
+                    },
+                    plugins: { legend: { labels: { color: '#9ca3af' } } }
+                }
+            });
+
 
             function updateChart() {
                 const sortedLabels = Object.keys(detectionCounts).sort((a, b) => detectionCounts[b] - detectionCounts[a]);
@@ -192,8 +279,14 @@
 
             stopButton.addEventListener('click', () => {
                 socket.emit('stop_simulation');
-                stopButton.textContent = 'Stopping...';
+
+                // Immediately reset UI instead of waiting
+                setControlsState(false);
+                stopButton.textContent = 'Stop';
+                statusText.textContent = 'STOPPED';
+                statusBox.className = 'p-3 rounded-lg text-center transition-all duration-300 status-idle';
             });
+
 
             // --- Socket.IO Handlers ---
             socket.on('simulation_status', (data) => {
@@ -201,7 +294,7 @@
                     setControlsState(false);
                     stopButton.textContent = 'Stop';
                     statusText.textContent = data.status.toUpperCase();
-                    statusBox.className = 'p-6 rounded-lg text-center transition-all duration-300 status-idle';
+                    statusBox.className = 'p-3 rounded-lg text-center transition-all duration-300 status-idle';
                 }
             });
 
@@ -209,10 +302,22 @@
                 const predictionClean = data.prediction.replace(/-/g, ' ').toUpperCase();
                 statusText.textContent = predictionClean;
                 const isAttack = data.prediction.includes('attack') && !data.prediction.includes('free');
-                
-                statusBox.className = `p-6 rounded-lg text-center transition-all duration-300 ${isAttack ? 'status-attack' : 'status-normal'}`;
+
+                // Update timeline chart (after defining isAttack)
+                timelineChart.data.labels.push(data.timestamp);
+                timelineChart.data.datasets[0].data.push(isAttack ? 1 : 0); // Attack = 1, Normal = 0
+
+                if (timelineChart.data.labels.length > 50) {
+                    timelineChart.data.labels.shift();
+                    timelineChart.data.datasets[0].data.shift();
+                }
+                timelineChart.update();
+
+                // Update status box
+                statusBox.className = `p-3 rounded-lg text-center transition-all duration-300 ${isAttack ? 'status-🚨 ATTACK' : 'status-✅ NORMAL'}`;
                 statusBox.classList.toggle('pulse', isAttack);
 
+                // Update labels + metrics
                 trueLabelEl.textContent = data.true_label.replace(/-/g, ' ').toUpperCase();
                 resultTextEl.textContent = data.is_correct ? 'CORRECT' : 'INCORRECT';
                 resultTextEl.className = `text-lg font-bold ${data.is_correct ? 'correct' : 'incorrect'}`;
@@ -223,9 +328,11 @@
                 const accuracy = totalWindows > 0 ? ((correctPredictions / totalWindows) * 100).toFixed(1) : 0;
                 accuracyEl.textContent = `${accuracy}%`;
 
+                // Update detection bar chart
                 detectionCounts[data.prediction] = (detectionCounts[data.prediction] || 0) + 1;
                 updateChart();
 
+                // Update event log
                 const newRow = document.createElement('tr');
                 newRow.className = 'bg-gray-800/50 border-b border-gray-700/50';
                 newRow.innerHTML = `
