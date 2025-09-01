@@ -1,0 +1,10 @@
+Flask
+Flask-SocketIO
+pandas
+numpy
+scikit-learn
+joblib
+python-can
+scipy
+tensorflow
+eventlet
