@@ -9,8 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* A more refined and professional color scheme and animation */
-        body { font-family: 'Inter', sans-serif; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
         
         .status-normal { background: linear-gradient(45deg, #10b981, #34d399); box-shadow: 0 0 20px rgba(16, 185, 129, 0.5); }
         .status-attack { background: linear-gradient(45deg, #ef4444, #f87171); box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
@@ -20,6 +20,13 @@
         .pulse { animation: pulse-animation 1.5s infinite; }
         tr:nth-child(even) { background-color: rgba(55,65,81,0.3); }
         tr:hover { background-color: rgba(59,130,246,0.2); }
+        tr:nth-child(even) { background-color: rgba(75,85,99,0.25); } /* lighter accent */
+        .event-timestamp {
+            font-family: monospace;
+            text-align: right;
+            color: #d1d5db; /* lighter gray */
+        }
+
 
         @keyframes pulse-animation {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
@@ -57,6 +64,7 @@
                 <button id="start-button" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md">Start</button>
                 <button id="stop-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md" disabled>Stop</button>
                 <button id="clear-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md">Clear</button>
+                <button id="download-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-6 rounded-lg transition duration-300 shadow-md">Download Log</button>
             </div>
 
         </div>
@@ -148,6 +156,7 @@
             const datasetSelect = document.getElementById('dataset-select');
             const chartCanvas = document.getElementById('detection-chart');
             const clearButton = document.getElementById('clear-button');
+            const downloadButton = document.getElementById('download-button');
 
             // --- State variables ---
             let totalWindows = 0;
@@ -191,6 +200,27 @@
             // --- Event Listener for Clear ---
             clearButton.addEventListener('click', clearDashboard);
 
+            function downloadCSV() {
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Time,Prediction,Actual,Result\n"; // headers
+
+                Array.from(eventLog.children).forEach(row => {
+                    const cols = row.querySelectorAll("td");
+                    const values = Array.from(cols).map(td => td.textContent.trim());
+                    csvContent += values.join(",") + "\n";
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "event_log.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            downloadButton.addEventListener("click", downloadCSV);
+
             // --- Chart.js Setup ---
             const chartCtx = chartCanvas.getContext('2d');
             const detectionChart = new Chart(chartCtx, {
@@ -210,7 +240,21 @@
                             }
 
                     },
-                    plugins: { legend: { display: false }, tooltip: { enabled: false } }
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { 
+                            enabled: true,
+                            backgroundColor: 'rgba(31, 41, 55, 0.9)', // dark gray
+                            titleColor: '#f3f4f6', // light gray
+                            bodyColor: '#d1d5db',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 8,
+                            callbacks: {
+                                label: (context) => `Count: ${context.raw}`
+                            }
+                        } 
+                    }
                 }
             });
 
@@ -242,7 +286,20 @@
                             }
 
                     },
-                    plugins: { legend: { labels: { color: '#9ca3af' } } }
+                    plugins: { 
+                        legend: { labels: { color: '#9ca3af' } },
+                        tooltip: {
+                            backgroundColor: 'rgba(31, 41, 55, 0.9)',
+                            titleColor: '#f3f4f6',
+                            bodyColor: '#d1d5db',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 8,
+                            callbacks: {
+                                label: (context) => context.raw === 1 ? 'Attack' : 'Normal'
+                            }
+                        }
+                    }
                 }
             });
 
@@ -314,7 +371,7 @@
                 timelineChart.update();
 
                 // Update status box
-                statusBox.className = `p-3 rounded-lg text-center transition-all duration-300 ${isAttack ? 'status-🚨 ATTACK' : 'status-✅ NORMAL'}`;
+                statusBox.className = `p-3 rounded-lg text-center transition-all duration-300 ${isAttack ? 'status-attack' : 'status-normal'}`;
                 statusBox.classList.toggle('pulse', isAttack);
 
                 // Update labels + metrics
@@ -336,7 +393,7 @@
                 const newRow = document.createElement('tr');
                 newRow.className = 'bg-gray-800/50 border-b border-gray-700/50';
                 newRow.innerHTML = `
-                    <td class="px-4 py-2">${data.timestamp}</td>
+                    <td class="px-4 py-2 event-timestamp">${data.timestamp}</td>
                     <td class="px-4 py-2">${data.prediction}</td>
                     <td class="px-4 py-2">${data.true_label}</td>
                     <td class="px-4 py-2 font-bold ${data.is_correct ? 'correct' : 'incorrect'}">${data.is_correct ? '✓' : '✗'}</td>
