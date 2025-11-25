@@ -109,6 +109,23 @@
                     <h2 class="text-lg font-semibold mb-3 text-gray-400">Prediction Timeline</h2>
                     <div class="relative h-40"><canvas id="timeline-chart"></canvas></div>
                 </div>
+                <div class="bg-gray-800/50 p-4 rounded-xl shadow-lg border border-gray-700">
+                    <h2 class="text-lg font-semibold mb-3 text-gray-400">System Metrics</h2>
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                            <h3 class="text-gray-500 text-sm">CPU</h3>
+                            <p id="cpu-percent">0%</p>
+                        </div>
+                        <div>
+                            <h3 class="text-gray-500 text-sm">Memory</h3>
+                            <p id="memory-percent">0%</p>
+                        </div>
+                        <div>
+                            <h3 class="text-gray-500 text-sm">Disk</h3>
+                            <p id="disk-percent">0%</p>
+                        </div>
+                    </div>
+                </div>
 
             </div>
 
@@ -358,6 +375,10 @@
                 const predictionClean = data.prediction.replace(/-/g, ' ').toUpperCase();
                 statusText.textContent = predictionClean;
                 const isAttack = data.prediction.includes('attack') && !data.prediction.includes('free');
+
+                document.getElementById('cpu-percent').innerText = data.cpu_percent + '%';
+                document.getElementById('memory-percent').innerText = data.memory_percent + '%';
+                document.getElementById('disk-percent').innerText = data.disk_percent + '%';
 
                 // Update timeline chart (after defining isAttack)
                 timelineChart.data.labels.push(data.timestamp);
